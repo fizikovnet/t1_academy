@@ -3,6 +3,7 @@ package com.fizikovnet.hw1;
 import com.fizikovnet.hw1.annotations.*;
 import com.fizikovnet.hw1.exceptions.TestRunnerExceptions;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -10,110 +11,103 @@ import java.util.*;
 
 public class TestRunner {
 
-    public static void runTests(Class c) {
+    public static void runTests(Class<?> testClass) {
         try {
-            Class klass = Class.forName(c.getName());
+            Class<?> klass = Class.forName(testClass.getName());
 
-            validateStructureTestClass(klass);
+            validateTestClassStructure(klass);
             Method[] methods = klass.getDeclaredMethods();
 
-            invokeBeforeSuite(methods);
+            invokeAnnotatedMethods(methods, BeforeSuite.class);
 
-            Map<Integer, List<Method>> orderedMethodsToInvoke = makeTestMethodsMap(methods);
-            Map<Integer, Method> forEachMethods = makeBeforeAfterTestMethodsMap(methods);
+            Map<Integer, List<Method>> testMethods = getTestMethodsByPriority(methods);
+            Map<Integer, Method> beforeAfterMethods = getBeforeAfterMethods(methods);
             Object testInstance = klass.getDeclaredConstructor().newInstance();
-            for (List<Method> methodList : orderedMethodsToInvoke.values()) {
-                for (Method method : methodList) {
-                    if (forEachMethods.containsKey(0)) {
-                        forEachMethods.get(0).invoke(null);
-                    }
-                    method.invoke(testInstance);
-                    if (forEachMethods.containsKey(1)) {
-                        forEachMethods.get(1).invoke(null);
-                    }
-                }
-            }
 
-            invokeAfterSuite(methods);
+            executeTestMethods(testInstance, testMethods, beforeAfterMethods);
+
+            invokeAnnotatedMethods(methods, AfterSuite.class);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    private static Map<Integer, Method> makeBeforeAfterTestMethodsMap(Method[] methods) {
-        Map<Integer, Method> result = new HashMap<>();
+    private static Map<Integer, Method> getBeforeAfterMethods(Method[] methods) {
+        Map<Integer, Method> methodMap = new HashMap<>();
         for (Method method : methods) {
             if (method.isAnnotationPresent(BeforeTest.class)) {
-                result.put(0, method);
-            }
-            if (method.isAnnotationPresent(AfterTest.class)) {
-                result.put(1, method);
-            }
-        }
-        return result;
-    }
-
-    private static void invokeAfterSuite(Method[] methods) throws InvocationTargetException, IllegalAccessException {
-        for (Method m : methods) {
-            if (m.isAnnotationPresent(AfterSuite.class)) {
-                m.invoke(null);
+                methodMap.put(0, method);
+            } else if (method.isAnnotationPresent(AfterTest.class)) {
+                methodMap.put(1, method);
             }
         }
+        return methodMap;
     }
 
-    private static Map<Integer, List<Method>> makeTestMethodsMap(Method[] methods) {
-        Map<Integer, List<Method>> map = new TreeMap<>(Collections.reverseOrder());
-        for (Method m : methods) {
-            if (m.isAnnotationPresent(Test.class)) {
-                int priority = m.getAnnotation(Test.class).priority();
-                if (map.containsKey(priority)) {
-                    List<Method> l = new ArrayList<>(map.get(priority));
-                    l.add(m);
-                    map.put(priority, l);
-                } else {
-                    map.put(priority, List.of(m));
+    private static Map<Integer, List<Method>> getTestMethodsByPriority(Method[] methods) {
+        Map<Integer, List<Method>> testMethodsMap = new TreeMap<>(Collections.reverseOrder());
+        for (Method method : methods) {
+            if (method.isAnnotationPresent(Test.class)) {
+                int priority = method.getAnnotation(Test.class).priority();
+                testMethodsMap.computeIfAbsent(priority, k -> new ArrayList<>()).add(method);
+            }
+        }
+        return testMethodsMap;
+    }
+
+    private static void invokeAnnotatedMethods(Method[] methods, Class<? extends Annotation> annotation) throws InvocationTargetException, IllegalAccessException {
+        for (Method method : methods) {
+            if (method.isAnnotationPresent(annotation)) {
+                method.invoke(null);
+            }
+        }
+    }
+
+    private static void executeTestMethods(Object testInstance, Map<Integer, List<Method>> testMethods, Map<Integer, Method> beforeAfterMethods) throws InvocationTargetException, IllegalAccessException {
+        for (List<Method> methods : testMethods.values()) {
+            for (Method method : methods) {
+                if (beforeAfterMethods.containsKey(0)) {
+                    beforeAfterMethods.get(0).invoke(null);
+                }
+                method.invoke(testInstance);
+                if (beforeAfterMethods.containsKey(1)) {
+                    beforeAfterMethods.get(1).invoke(null);
                 }
             }
         }
-        return map;
     }
 
-    private static void invokeBeforeSuite(Method[] methods) throws IllegalAccessException, InvocationTargetException {
-        for (Method m : methods) {
-            if (m.isAnnotationPresent(BeforeSuite.class)) {
-                m.invoke(null);
-            }
-        }
-    }
-
-    private static void validateStructureTestClass(Class klass) {
+    private static void validateTestClassStructure(Class<?> klass) {
         Method[] methods = klass.getDeclaredMethods();
-        int countBeforeSuiteMethods = 0;
-        int countAfterSuiteMethods = 0;
-        for (Method m : methods) {
-            if (m.isAnnotationPresent(BeforeSuite.class)) {
-                if (!Modifier.isStatic(m.getModifiers())) {
-                    throw new TestRunnerExceptions("Method "+m.getName()+" should be a static");
-                }
-                if (countBeforeSuiteMethods > 0) {
+        boolean hasBeforeSuite = false;
+        boolean hasAfterSuite = false;
+
+        for (Method method : methods) {
+            if (method.isAnnotationPresent(BeforeSuite.class)) {
+                validateStaticMethod(method, "BeforeSuite");
+                if (hasBeforeSuite) {
                     throw new TestRunnerExceptions("Test class has more than one BeforeSuite annotations");
                 }
-                countBeforeSuiteMethods++;
+                hasBeforeSuite = true;
             }
-            if (m.isAnnotationPresent(AfterSuite.class)) {
-                if (!Modifier.isStatic(m.getModifiers())) {
-                    throw new TestRunnerExceptions("Method "+m.getName()+" should be a static");
-                }
-                if (countAfterSuiteMethods > 0) {
+            if (method.isAnnotationPresent(AfterSuite.class)) {
+                validateStaticMethod(method, "AfterSuite");
+                if (hasAfterSuite) {
                     throw new TestRunnerExceptions("Test class has more than one AfterSuite annotations");
                 }
-                countAfterSuiteMethods++;
+                hasAfterSuite = true;
             }
-            if (m.isAnnotationPresent(Test.class)) {
-                if (Modifier.isStatic(m.getModifiers())) {
-                    throw new TestRunnerExceptions("Method "+m.getName()+" should not be a static");
+            if (method.isAnnotationPresent(Test.class)) {
+                if (Modifier.isStatic(method.getModifiers())) {
+                    throw new TestRunnerExceptions("Method "+method.getName()+" should not be a static");
                 }
             }
+        }
+    }
+
+    private static void validateStaticMethod(Method method, String annotationName) {
+        if (!Modifier.isStatic(method.getModifiers())) {
+            throw new TestRunnerExceptions("Method " + method.getName() + " with " + annotationName + " annotation should be static");
         }
     }
 }
