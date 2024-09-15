@@ -30,7 +30,7 @@ public class TestService {
         System.out.println("testMethod2 method is invoked!");
     }
 
-    @Test(priority = 1)
+    @Test(priority = 2)
     public void testMethod3() {
         System.out.println("testMethod3 method is invoked!");
 
@@ -40,6 +40,12 @@ public class TestService {
     public void testMethod1() {
         System.out.println("testMethod1 method is invoked!");
 
+    }
+
+    @Test(priority = 1)
+    @CsvSource("10, Java, 20, true")
+    public void testMethod4(Integer a, String b, int c, boolean d) {
+        System.out.printf("testMethod4 method with parameters: %d, %s, %d, %b is invoked!%n", a, b, c, d);
     }
 
 

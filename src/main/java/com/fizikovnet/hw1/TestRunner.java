@@ -69,12 +69,39 @@ public class TestRunner {
                 if (beforeAfterMethods.containsKey(0)) {
                     beforeAfterMethods.get(0).invoke(null);
                 }
-                method.invoke(testInstance);
+                if (method.isAnnotationPresent(CsvSource.class)) {
+                    String csvData = method.getAnnotation(CsvSource.class).value();
+                    String[] values = csvData.split(",");
+                    Object[] parameters = convertParameters(method.getParameterTypes(), values);
+                    method.invoke(testInstance, parameters);
+                } else {
+                    method.invoke(testInstance);
+                }
                 if (beforeAfterMethods.containsKey(1)) {
                     beforeAfterMethods.get(1).invoke(null);
                 }
             }
         }
+    }
+
+    private static Object[] convertParameters(Class<?>[] parameterTypes, String[] values) {
+        Object[] parameters = new Object[parameterTypes.length];
+        for (int i = 0; i < parameterTypes.length; i++) {
+            String value = values[i].trim();
+            parameters[i] = switch (parameterTypes[i].getName()) {
+                case "int", "java.lang.Integer" -> Integer.parseInt(value);
+                case "boolean", "java.lang.Boolean" -> Boolean.parseBoolean(value);
+                case "byte", "java.lang.Byte" -> Byte.parseByte(value);
+                case "short", "java.lang.Short" -> Short.parseShort(value);
+                case "long", "java.lang.Long" -> Long.parseLong(value);
+                case "float", "java.lang.Float" -> Float.parseFloat(value);
+                case "double", "java.lang.Double" -> Double.parseDouble(value);
+                case "char", "java.lang.Character" -> value.charAt(0);
+                case "java.lang.String" -> value;
+                default -> throw new IllegalArgumentException("Unsupported parameter type: " + parameterTypes[i]);
+            };
+        }
+        return parameters;
     }
 
     private static void validateTestClassStructure(Class<?> klass) {
