@@ -34,12 +34,13 @@ public class Main {
      */
     private static void task2() {
         List<Integer> ints = List.of(5, 2, 10, 9, 4, 3, 10, 1, 13);
-        Optional<Integer> any = ints.stream()
+        int result = ints.stream()
                 .sorted(Comparator.reverseOrder())
                 .skip(2)
-                .findAny();
+                .findFirst()
+                .orElseThrow(RuntimeException::new);
 
-        System.out.println(any.get());
+        System.out.println(result);
     }
 
     /**
@@ -49,13 +50,14 @@ public class Main {
      */
     private static void task3() {
         List<Integer> ints = List.of(5, 2, 10, 9, 4, 3, 10, 1, 13);
-        Optional<Integer> any = ints.stream()
+        int result = ints.stream()
                 .distinct()
                 .sorted(Comparator.reverseOrder())
                 .skip(2)
-                .findAny();
+                .findFirst()
+                .orElseThrow(RuntimeException::new);
 
-        System.out.println(any.get());
+        System.out.println(result);
     }
 
     /**
@@ -101,11 +103,13 @@ public class Main {
                 new Employee("Павел", 43, "Инженер"),
                 new Employee("Евгений", 35, "Продавец"));
 
-        OptionalDouble avgOfEngineers = employees.stream()
+        double avgOfEngineers = employees.stream()
                 .filter(e -> e.getJob().equals("Инженер"))
                 .mapToInt(Employee::getAge)
-                .average();
-        System.out.println("Average age of Engineers: " + avgOfEngineers.getAsDouble());
+                .average()
+                .orElseThrow(RuntimeException::new);
+
+        System.out.println("Average age of Engineers: " + avgOfEngineers);
     }
 
     /**
@@ -117,15 +121,11 @@ public class Main {
                 "office","woman","story","way","salad","expression",
                 "mode","version","newspaper","air","river");
 
-        List<String> longWords = words.stream()
-                .collect(Collectors.groupingBy(String::length))
-                .entrySet()
-                .stream()
-                .max(Map.Entry.comparingByKey())
-                .map(Map.Entry::getValue)
-                .get();
+        String result = words.stream()
+                .max(Comparator.comparingInt(String::length))
+                .orElseThrow(RuntimeException::new);
 
-        System.out.println("Longest word: " + longWords.get(0));
+        System.out.println("Longest word: " + result);
     }
 
     /**
@@ -150,8 +150,8 @@ public class Main {
                 "office","woman","story","way","salad","expression",
                 "mode","version","newspaper","air","river", "apple");
         words.stream()
-                .sorted()
-                .sorted(Comparator.comparingInt(String::length))
+                .sorted(Comparator.comparing(String::length)
+                        .thenComparing(Comparator.naturalOrder()))
                 .forEach(System.out::println);
     }
 
@@ -171,7 +171,7 @@ public class Main {
                 .map(s -> s.split("\\s"))
                 .flatMap(Arrays::stream)
                 .max(Comparator.comparingInt(String::length))
-                .get();
+                .orElseThrow(RuntimeException::new);
 
         System.out.println("Longest word from lists: " + result);
     }
